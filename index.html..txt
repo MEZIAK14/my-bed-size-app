@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bed Size Advisor - Customizable</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f0f4f8; overscroll-behavior-y: none; /* Prevents pull-to-refresh issues on mobile that might interfere with orbit controls */ }
+        .container { max-width: 600px; margin: 2rem auto; padding: 2rem; background-color: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); }
+        .input-group { margin-bottom: 1.5rem; }
+        .input-label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: #374151; }
+        .input-field { width: 100%; padding: 0.75rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; transition: border-color 0.3s; }
+        .input-field:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3); }
+        .calculate-button { width: 100%; padding: 0.875rem 1.5rem; background-color: #3b82f6; color: white; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.3s; }
+        .calculate-button:hover { background-color: #2563eb; }
+        .result-box { margin-top: 2rem; padding: 1.5rem; background-color: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; text-align: center; }
+        .result-box h3 { color: #3730a3; font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; }
+        .result-box p { color: #4338ca; font-size: 1rem; line-height: 1.6; margin-bottom: 0.5rem; }
+        .result-box .details { font-size: 0.9rem; text-align: left; margin-top: 1rem; color: #4f46e5; }
+        .error-message { margin-top: 1rem; padding: 0.75rem 1rem; background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 8px; text-align: left; }
+        .error-message ul { list-style-type: disc; margin-left: 1.5rem;}
+        #bedVisualContainer { width: 100%; height: 350px; margin-top: 2rem; border: 1px solid #d1d5db; border-radius: 8px; background-color: #f0f4f8; position: relative; overflow: hidden; touch-action: none; /* Important for OrbitControls on touch devices */ }
+        #bedVisualContainer canvas { display: block; } /* Ensure canvas takes up the container space */
+        .person-section-title { font-size: 1.125rem; font-weight: 600; color: #1f2937; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e5e7eb;}
+
+
+        @media (max-width: 640px) {
+            .container { margin: 1rem; padding: 1.5rem; }
+            #bedVisualContainer { height: 300px; }
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">Bed Size Advisor</h1>
+
+
+        <div class="input-group">
+            <label for="numPeople" class="input-label">Number of People:</label>
+            <select id="numPeople" class="input-field">
+                <option value="1" selected>1 Person</option>
+                <option value="2">2 People</option>
+            </select>
+        </div>
+
+
+        <div class="input-group">
+            <label for="spaciousness" class="input-label">Spaciousness Preference:</label>
+            <select id="spaciousness" class="input-field">
+                <option value="cozy">Cozy</option>
+                <option value="standard" selected>Standard</option>
+                <option value="roomy">Roomy</option>
+            </select>
+        </div>
+
+
+        <div class="input-group">
+            <label for="storageOption" class="input-label">Under-Bed Storage:</label>
+            <select id="storageOption" class="input-field">
+                <option value="none" selected>None (Legs)</option>
+                <option value="drawers">Side Drawers</option>
+                <option value="lift_up">Lift-up Frame (Solid Base)</option>
+            </select>
+        </div>
+
+
+        <div id="person1Inputs">
+            <h3 class="person-section-title">Person 1 Details</h3>
+            <div class="input-group">
+                <label for="height1" class="input-label">Height (cm):</label>
+                <input type="number" id="height1" class="input-field person-input" placeholder="e.g., 175">
+            </div>
+            <div class="input-group">
+                <label for="weight1" class="input-label">Weight (kg):</label>
+                <input type="number" id="weight1" class="input-field person-input" placeholder="e.g., 70">
+            </div>
+        </div>
+
+
+        <div id="person2Inputs" class="hidden mt-6">
+            <h3 class="person-section-title">Person 2 Details</h3>
+            <div class="input-group">
+                <label for="height2" class="input-label">Height (cm):</label>
+                <input type="number" id="height2" class="input-field person-input" placeholder="e.g., 165">
+            </div>
+            <div class="input-group">
+                <label for="weight2" class="input-label">Weight (kg):</label>
+                <input type="number" id="weight2" class="input-field person-input" placeholder="e.g., 60">
+            </div>
+        </div>
+
+
+        <button id="calculateBtn" class="calculate-button mt-2">Find Your Perfect Bed</button>
+
+
+        <div id="resultArea" class="hidden"></div>
+        <div id="errorArea" class="hidden"></div>
+        <div id="bedVisualContainer" class="hidden"></div>
+    </div>
+
+
+    <script>
+        // Standard bed sizes data (Width x Length in cm and inches)
+        const bedSizes = [
+            { name: "Twin", widthCm: 96.52, lengthCm: 190.5, widthIn: 38, lengthIn: 75 },
+            { name: "Twin XL", widthCm: 96.52, lengthCm: 203.2, widthIn: 38, lengthIn: 80 },
+            { name: "Full", widthCm: 137.16, lengthCm: 190.5, widthIn: 54, lengthIn: 75 },
+            { name: "Queen", widthCm: 152.4, lengthCm: 203.2, widthIn: 60, lengthIn: 80 },
+            { name: "King", widthCm: 193.04, lengthCm: 203.2, widthIn: 76, lengthIn: 80 },
+            { name: "California King", widthCm: 182.88, lengthCm: 213.36, widthIn: 72, lengthIn: 84 },
+        ];
+
+
+        // DOM element references
+        const numPeopleSelect = document.getElementById('numPeople');
+        const spaciousnessSelect = document.getElementById('spaciousness');
+        const storageOptionSelect = document.getElementById('storageOption');
+        const person1InputsDiv = document.getElementById('person1Inputs');
+        const person2InputsDiv = document.getElementById('person2Inputs');
+        const height1Input = document.getElementById('height1');
+        const weight1Input = document.getElementById('weight1');
+        const height2Input = document.getElementById('height2');
+        const weight2Input = document.getElementById('weight2');
+        const calculateBtn = document.getElementById('calculateBtn');
+        const resultArea = document.getElementById('resultArea');
+        const errorArea = document.getElementById('errorArea');
+        const bedVisualContainer = document.getElementById('bedVisualContainer');
+
+
+        // Three.js variables
+        let scene, camera, renderer, bedGroup, controls, groundPlane;
+       
+        // Constants for 3D model dimensions (in cm, will be scaled for the 3D scene)
+        const MATTRESS_THICKNESS_CM = 20;
+        const FRAME_BORDER_THICKNESS_CM = 5;    
+        const FRAME_VISIBLE_HEIGHT_CM = 15; // This is the height of the bed base/box frame
+        const LEG_HEIGHT_CM = 20;              
+        const LEG_DIAMETER_CM = 5;            
+        const PILLOW_LENGTH_CM = 60; // Length along Z axis of bed      
+        const PILLOW_THICKNESS_CM = 12; // Height of pillow      
+        const ACCENT_PILLOW_SCALE_FACTOR = 0.75;
+        const ACCENT_PILLOW_GAP_CM = 3;        
+        const HEADBOARD_HEIGHT_CM = 60; // Visible height above mattress      
+        const HEADBOARD_THICKNESS_CM = 7;      
+        const CM_TO_3D_SCALE = 0.008;          
+       
+        // Constants for drawer details
+        const DRAWER_FRONT_THICKNESS_CM = 2;    
+        const NUM_DRAWERS_PER_SIDE = 2;        
+        const DRAWER_GAP_CM = 2.5; // Gap between drawers and at ends            
+        const DRAWER_HANDLE_HEIGHT_CM = 2.5;    
+        const DRAWER_HANDLE_WIDTH_CM = 10;      
+        const DRAWER_HANDLE_DEPTH_CM = 1.5;
+        const DRAWER_USABLE_HEIGHT_FACTOR = 0.75; // Drawer internal height is this factor of FRAME_VISIBLE_HEIGHT_CM
+        const USABLE_DRAWER_DEPTH_CM_MAX = 50; // Max depth a drawer goes into the bed
+        const USABLE_DRAWER_SIDE_CLEARANCE_CM = 5; // Clearance from mattress edge/central support
+
+
+        // Constants for Person Model
+        const PERSON_MODEL_BODY_DEPTH_CM = 20; // How "thick" the person is when lying down (Y-axis)
+        const PERSON_BODY_WIDTH_RATIO = 0.25; // Body width as a ratio of person's height (X-axis)
+        const PERSON_HEAD_RADIUS_RATIO = 0.065; // Head radius as a ratio of person's height
+        const HEAD_EQUIVALENT_LENGTH_FACTOR = PERSON_HEAD_RADIUS_RATIO * 2.5; // Proportion of height attributed to head
+        const SHOULDER_PILLOW_OVERLAP_CM = 15; // How much (cm) person's shoulder overlaps onto the pillow
+
+
+        /**
+         * Clears previous results, error messages, and disposes of the old 3D bed visualization.
+         */
+        function clearResultsAndVisual() {
+            resultArea.innerHTML = '';
+            resultArea.classList.add('hidden');
+            errorArea.innerHTML = '';
+            errorArea.classList.add('hidden');
+            bedVisualContainer.classList.add('hidden');
+           
+            if (bedGroup && scene) {
+                scene.remove(bedGroup);
+                bedGroup.traverse(child => {
+                    if (child.isMesh) {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach(m => m.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
+                        }
+                    }
+                });
+                bedGroup = null;
+            }
+            if (renderer) {
+                renderer.renderLists.dispose();
+            }
+        }
+       
+        numPeopleSelect.addEventListener('change', (event) => {
+            const num = event.target.value;
+            if (num === '1') {
+                person2InputsDiv.classList.add('hidden');
+                height2Input.value = '';
+                weight2Input.value = '';
+            } else if (num === '2') {
+                person2InputsDiv.classList.remove('hidden');
+            }
+            clearResultsAndVisual();
+        });
+
+
+        spaciousnessSelect.addEventListener('change', () => { clearResultsAndVisual(); });
+        storageOptionSelect.addEventListener('change', () => { clearResultsAndVisual(); });
+        document.querySelectorAll('.person-input').forEach(input => {
+            input.addEventListener('input', clearResultsAndVisual);
+        });
+
+
+        /**
+         * Initializes the Three.js scene, camera, renderer, lights, ground plane, and orbit controls.
+         */
+        function init3D() {
+            if (!bedVisualContainer) { console.error("Bed visual container not found for init3D."); return; }
+           
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f4f8);
+
+
+            const aspect = bedVisualContainer.clientWidth > 0 ? bedVisualContainer.clientWidth / bedVisualContainer.clientHeight : 16/9;
+            camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 100);
+            camera.position.set(3.5, 3, 4.5); // Adjusted initial camera view
+            camera.lookAt(0, 0.5, 0); // Look at center of where bed will be
+
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(bedVisualContainer.clientWidth || 600, bedVisualContainer.clientHeight || 350);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+           
+            while (bedVisualContainer.firstChild) { bedVisualContainer.removeChild(bedVisualContainer.firstChild); }
+            bedVisualContainer.appendChild(renderer.domElement);
+
+
+            // Lights
+            const hemisphereLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 0.8); scene.add(hemisphereLight);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            const typicalMaxBedDim3D = 220 * CM_TO_3D_SCALE; // Approx King size in 3D units
+            directionalLight.position.set(typicalMaxBedDim3D * 0.7, typicalMaxBedDim3D * 1.5, typicalMaxBedDim3D * 1);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048; directionalLight.shadow.mapSize.height = 2048;
+            const shadowCamSize = typicalMaxBedDim3D * 1.8; // Increased shadow camera frustum
+            directionalLight.shadow.camera.near = 0.5; directionalLight.shadow.camera.far = typicalMaxBedDim3D * 5;
+            directionalLight.shadow.camera.left = -shadowCamSize; directionalLight.shadow.camera.right = shadowCamSize;
+            directionalLight.shadow.camera.top = shadowCamSize; directionalLight.shadow.camera.bottom = -shadowCamSize;
+            scene.add(directionalLight);
+            // const dLightHelper = new THREE.CameraHelper(directionalLight.shadow.camera); scene.add(dLightHelper);
+
+
+
+
+            // Ground
+            const groundGeometry = new THREE.PlaneGeometry(20, 20);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0xd1c7b7, roughness: 0.9 });
+            groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
+            groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.y = 0; groundPlane.receiveShadow = true;
+            scene.add(groundPlane);
+
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false; controls.minDistance = 1.5; controls.maxDistance = 15;    
+            controls.maxPolarAngle = Math.PI / 2 - 0.05; // Prevent looking from below ground
+
+
+            window.addEventListener('resize', onWindowResize, false);
+            animate3D();
+        }
+
+
+        function onWindowResize() {
+            if (!renderer || !camera || !bedVisualContainer) return;
+            if (bedVisualContainer.clientWidth === 0 || bedVisualContainer.clientHeight === 0) return;
+            camera.aspect = bedVisualContainer.clientWidth / bedVisualContainer.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(bedVisualContainer.clientWidth, bedVisualContainer.clientHeight);
+        }
+
+
+        function animate3D() {
+            if (!renderer || !scene || !camera) return;
+            requestAnimationFrame(animate3D);
+            if (controls) controls.update();
+            renderer.render(scene, camera);
+        }
+       
+        /**
+         * Creates a simplified 3D mesh representing a person lying on the bed.
+         * The personHeightCm is the total height of the person.
+         * The body box will be shorter, and the head sphere will account for the head's portion of the height.
+         */
+        function createPersonOnBedMesh(personHeightCm, xOffset) {
+            const personGroup = new THREE.Group();
+
+
+            // Calculate actual length of the body box based on total height minus head portion
+            const headEquivalentActualCm = personHeightCm * HEAD_EQUIVALENT_LENGTH_FACTOR;
+            const bodyBoxActualCm = personHeightCm - headEquivalentActualCm;
+           
+            const personBodyBoxLength3D = bodyBoxActualCm * CM_TO_3D_SCALE; // Length of the main body box in 3D units
+            const personWidth3D = personHeightCm * PERSON_BODY_WIDTH_RATIO * CM_TO_3D_SCALE;
+            const personDepth3D = PERSON_MODEL_BODY_DEPTH_CM * CM_TO_3D_SCALE;
+
+
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x778899, roughness: 0.8 });
+
+
+            // Body (Box Geometry: width across bed, thickness when lying, length along bed)
+            const bodyGeometry = new THREE.BoxGeometry(personWidth3D, personDepth3D, personBodyBoxLength3D);
+            const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            personGroup.add(bodyMesh); // Body mesh is centered at personGroup's origin
+
+
+            // Head (Sphere Geometry)
+            const headRadius3D = personHeightCm * PERSON_HEAD_RADIUS_RATIO * CM_TO_3D_SCALE;
+            const headGeometry = new THREE.SphereGeometry(headRadius3D, 16, 16);
+            const headMesh = new THREE.Mesh(headGeometry, bodyMaterial);
+            // Position head at the -Z end of the body box (head of the bed is in -Z direction)
+            headMesh.position.z = -personBodyBoxLength3D / 2 - headRadius3D * 0.7;
+            headMesh.position.y = personDepth3D / 2 - headRadius3D * 0.6; // Slightly raise to simulate neck/pillow interaction
+            personGroup.add(headMesh);
+
+
+            personGroup.position.x = xOffset;
+
+
+            personGroup.castShadow = true; personGroup.receiveShadow = false;
+            bodyMesh.castShadow = true; bodyMesh.receiveShadow = true;
+            headMesh.castShadow = true; headMesh.receiveShadow = true;
+
+
+            return personGroup;
+        }
+
+
+        /**
+         * Creates or updates the 3D bed model in the scene, including person(s).
+         */
+        function updateBedVisual(mattressWidthCm, mattressLengthCm, numPeople, storageOption, p1HeightCm, p2HeightCm) {
+            if (!scene) {
+                init3D();
+                if (!scene) {
+                    console.error("Failed to initialize 3D scene for bed visual.");
+                    bedVisualContainer.innerHTML = '<p class="text-center text-red-500 p-4">Error: Could not create 3D bed model.</p>';
+                    return;
+                }
+            }
+           
+            if (bedGroup) { /* ... existing cleanup ... */
+                scene.remove(bedGroup);
+                bedGroup.traverse(child => {
+                    if (child.isMesh) {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                            else child.material.dispose();
+                        }
+                    }
+                });
+                bedGroup = null;
+            }
+
+
+            bedGroup = new THREE.Group();
+
+
+            // Convert CM to 3D scene units
+            const mattressWidth = mattressWidthCm * CM_TO_3D_SCALE;
+            const mattressLength = mattressLengthCm * CM_TO_3D_SCALE;
+            const mattressThickness = MATTRESS_THICKNESS_CM * CM_TO_3D_SCALE;
+            const frameBorder = FRAME_BORDER_THICKNESS_CM * CM_TO_3D_SCALE;
+            const outerFrameWidth = mattressWidth + 2 * frameBorder;  
+            const outerFrameLength = mattressLength + 2 * frameBorder;
+           
+            let currentLegHeight = LEG_HEIGHT_CM * CM_TO_3D_SCALE;
+            let currentFrameVisibleHeight = FRAME_VISIBLE_HEIGHT_CM * CM_TO_3D_SCALE;
+            let frameBaseY; // Y-coordinate of the bottom of the bed frame box
+
+
+            // Materials
+            const mattressMaterial = new THREE.MeshStandardMaterial({ color: 0xfff8f0, roughness: 0.95, metalness: 0.0 });
+            const woodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B7355, roughness: 0.75, metalness: 0.05 });
+            const pillowMaterial = new THREE.MeshStandardMaterial({ color: 0xe0e8f0, roughness: 0.95, metalness: 0.0 });
+            const drawerMaterial = new THREE.MeshStandardMaterial({ color: 0xC1B098, roughness: 0.7, metalness: 0.08 });
+            const handleMaterial = new THREE.MeshStandardMaterial({ color: 0x504030, roughness: 0.4, metalness: 0.3 });
+
+
+            // Bed Frame Base and Legs
+            if (storageOption === "lift_up") {
+                currentLegHeight = 0; // No legs for lift-up
+                currentFrameVisibleHeight = (FRAME_VISIBLE_HEIGHT_CM + LEG_HEIGHT_CM) * CM_TO_3D_SCALE; // Frame is taller
+                frameBaseY = 0; // Frame sits on the ground
+            } else { // Legs or Drawers
+                currentLegHeight = LEG_HEIGHT_CM * CM_TO_3D_SCALE;
+                frameBaseY = currentLegHeight; // Frame sits on top of legs
+                const legRadius = (LEG_DIAMETER_CM / 2) * CM_TO_3D_SCALE;
+                const legGeometry = new THREE.CylinderGeometry(legRadius, legRadius, currentLegHeight, 16);
+                const legPositions = [ // Position legs inset from outer frame corners
+                    { x: outerFrameWidth / 2 - legRadius - frameBorder * 0.5, z: outerFrameLength / 2 - legRadius - frameBorder * 0.5 },
+                    { x: -outerFrameWidth / 2 + legRadius + frameBorder * 0.5, z: outerFrameLength / 2 - legRadius - frameBorder * 0.5 },
+                    { x: outerFrameWidth / 2 - legRadius - frameBorder * 0.5, z: -outerFrameLength / 2 + legRadius + frameBorder * 0.5 },
+                    { x: -outerFrameWidth / 2 + legRadius + frameBorder * 0.5, z: -outerFrameLength / 2 + legRadius + frameBorder * 0.5 }  
+                ];
+                if (storageOption !== "drawers" || currentLegHeight > 0.01) { // Only add legs if "none" or if drawers still have some leg height
+                     legPositions.forEach(pos => {
+                        const leg = new THREE.Mesh(legGeometry, woodMaterial);
+                        leg.position.set(pos.x, currentLegHeight / 2, pos.z); // Center of leg is at half its height
+                        leg.castShadow = true; leg.receiveShadow = true; bedGroup.add(leg);
+                    });
+                }
+            }
+           
+            // Main Bed Frame Box
+            const frameGeometry = new THREE.BoxGeometry(outerFrameWidth, currentFrameVisibleHeight, outerFrameLength);
+            const frameMesh = new THREE.Mesh(frameGeometry, woodMaterial);
+            frameMesh.position.y = frameBaseY + currentFrameVisibleHeight / 2; // Center of frame box
+            frameMesh.castShadow = true; frameMesh.receiveShadow = true; bedGroup.add(frameMesh);
+
+
+            // Drawers (if selected)
+            if (storageOption === "drawers") {
+                const drawerFrontPanelThickness3D = DRAWER_FRONT_THICKNESS_CM * CM_TO_3D_SCALE;
+                // Drawer height is a factor of the bed base frame's visible height
+                const drawerActualHeightCm = FRAME_VISIBLE_HEIGHT_CM * DRAWER_USABLE_HEIGHT_FACTOR;
+                const drawerHeight3D = drawerActualHeightCm * CM_TO_3D_SCALE;
+               
+                const drawerGap3D = DRAWER_GAP_CM * CM_TO_3D_SCALE;
+                // Width of each drawer front panel (along the bed's length)
+                const drawerFaceWidthCm = ( (mattressLengthCm + 2 * FRAME_BORDER_THICKNESS_CM) - ( (NUM_DRAWERS_PER_SIDE + 1) * DRAWER_GAP_CM ) ) / NUM_DRAWERS_PER_SIDE;
+                const actualDrawerFaceWidthZ_3D = drawerFaceWidthCm * CM_TO_3D_SCALE;
+               
+                const handleDepth3D = DRAWER_HANDLE_DEPTH_CM * CM_TO_3D_SCALE;
+                const handleHeight3D = DRAWER_HANDLE_HEIGHT_CM * CM_TO_3D_SCALE;
+                const handleWidth3D = DRAWER_HANDLE_WIDTH_CM * CM_TO_3D_SCALE;    
+                const handleGeom = new THREE.BoxGeometry(handleDepth3D, handleHeight3D, handleWidth3D);
+
+
+                if (actualDrawerFaceWidthZ_3D > handleWidth3D * 0.8 && actualDrawerFaceWidthZ_3D > CM_TO_3D_SCALE * 10) {
+                    const drawerGeom = new THREE.BoxGeometry(drawerFrontPanelThickness3D, drawerHeight3D, actualDrawerFaceWidthZ_3D);
+                    // Drawers are positioned along the length of the bed (Z-axis in model)
+                    // Start Z for first drawer, from head end, after gap
+                    let startZ = (-outerFrameLength / 2) + drawerGap3D + (actualDrawerFaceWidthZ_3D / 2);
+
+
+                    for (let i = 0; i < NUM_DRAWERS_PER_SIDE; i++) {
+                        const zPos = startZ + (i * (actualDrawerFaceWidthZ_3D + drawerGap3D)) ;
+                        // Y position for drawers: centered within the frame's visible height, slightly offset by frameBaseY
+                        const drawerYPos = frameBaseY + (FRAME_VISIBLE_HEIGHT_CM * CM_TO_3D_SCALE / 2);
+                       
+                        const drawerRight = new THREE.Mesh(drawerGeom, drawerMaterial);
+                        // Drawers are on the side of the frame box. X position is at frame edge.
+                        drawerRight.position.set(outerFrameWidth / 2 - drawerFrontPanelThickness3D / 2, drawerYPos, zPos);
+                        drawerRight.castShadow = true; drawerRight.receiveShadow = true; bedGroup.add(drawerRight);
+                        const handleRight = new THREE.Mesh(handleGeom, handleMaterial);
+                        handleRight.position.set(drawerRight.position.x + drawerFrontPanelThickness3D / 2 + handleDepth3D / 2, drawerRight.position.y , drawerRight.position.z );
+                        handleRight.castShadow = true; bedGroup.add(handleRight);
+                       
+                        const drawerLeft = new THREE.Mesh(drawerGeom.clone(), drawerMaterial);
+                        drawerLeft.position.set(-outerFrameWidth / 2 + drawerFrontPanelThickness3D / 2, drawerYPos ,zPos);
+                        drawerLeft.castShadow = true; drawerLeft.receiveShadow = true; bedGroup.add(drawerLeft);
+                        const handleLeft = new THREE.Mesh(handleGeom.clone(), handleMaterial);
+                        handleLeft.position.set(drawerLeft.position.x - drawerFrontPanelThickness3D / 2 - handleDepth3D / 2, drawerLeft.position.y, drawerLeft.position.z);
+                        handleLeft.castShadow = true; bedGroup.add(handleLeft);
+                    }
+                } else { console.warn("Not enough space for drawers/handles given current bed length and frame settings."); }
+            }
+
+
+            // Mattress
+            const mattressY = frameBaseY + currentFrameVisibleHeight + mattressThickness / 2;
+            const mattressGeometry = new THREE.BoxGeometry(mattressWidth, mattressThickness, mattressLength);
+            const mattressMesh = new THREE.Mesh(mattressGeometry, mattressMaterial);
+            mattressMesh.position.y = mattressY;
+            mattressMesh.castShadow = true; mattressMesh.receiveShadow = true; bedGroup.add(mattressMesh);
+           
+            // Headboard
+            const headboardThickness3D = HEADBOARD_THICKNESS_CM * CM_TO_3D_SCALE;
+            const headboardVisibleHeightAboveMattress3D = HEADBOARD_HEIGHT_CM * CM_TO_3D_SCALE;
+            const topOfMattressY = mattressY + mattressThickness / 2;          
+            const headboardTopAbsY = topOfMattressY + headboardVisibleHeightAboveMattress3D;
+            const headboardBottomAbsY = frameBaseY + currentFrameVisibleHeight; // Headboard sits on top of frame box
+            let actualHeadboardTotalGeometricHeight = headboardTopAbsY - headboardBottomAbsY;
+            actualHeadboardTotalGeometricHeight = Math.max(CM_TO_3D_SCALE * 5, actualHeadboardTotalGeometricHeight);
+           
+            const headboardGeometry = new THREE.BoxGeometry(outerFrameWidth, actualHeadboardTotalGeometricHeight, headboardThickness3D);
+            const headboardMesh = new THREE.Mesh(headboardGeometry, woodMaterial);
+            const headboardCenterY = headboardBottomAbsY + actualHeadboardTotalGeometricHeight / 2;
+            // Headboard is at the head end of the outer frame. Its Z center is -outerFrameLength/2 + headboardThickness/2
+            const calculatedHeadboardCenterZ = (-outerFrameLength / 2) + (headboardThickness3D / 2);
+            headboardMesh.position.set(0, headboardCenterY, calculatedHeadboardCenterZ);
+            headboardMesh.castShadow = true; headboardMesh.receiveShadow = true; bedGroup.add(headboardMesh);
+
+
+            // Pillows
+            const mainPillowThickness3D = PILLOW_THICKNESS_CM * CM_TO_3D_SCALE;        
+            const mainPillowLength3D = PILLOW_LENGTH_CM * CM_TO_3D_SCALE; // Pillow length along Z          
+            const mainPillowBaseY = topOfMattressY + (mainPillowThickness3D * 0.9) / 2;
+            // Front face of headboard (where pillows rest against)
+            const headboardFrontFaceZ = calculatedHeadboardCenterZ + headboardThickness3D / 2;
+            const mainPillowCenterZ = headboardFrontFaceZ + mainPillowLength3D / 2 + (CM_TO_3D_SCALE * 2); // Small gap from headboard
+
+
+            const accentPillowThickness3D = mainPillowThickness3D * ACCENT_PILLOW_SCALE_FACTOR * 0.8;
+            const accentPillowLength3D = mainPillowLength3D * ACCENT_PILLOW_SCALE_FACTOR;
+            const accentPillowBaseY = topOfMattressY + accentPillowThickness3D / 2;
+            const accentPillowGap3D = ACCENT_PILLOW_GAP_CM * CM_TO_3D_SCALE;
+            // Accent pillows in front of main pillows
+            const accentPillowCenterZ = mainPillowCenterZ + mainPillowLength3D / 2 + accentPillowGap3D + accentPillowLength3D / 2;
+
+
+            if (parseInt(numPeople) === 1) { /* ... existing pillow logic ... */
+                const mainPillowSingleWidth = Math.min(mattressWidth * 0.7, PILLOW_LENGTH_CM * 1.2 * CM_TO_3D_SCALE);
+                const mainPillowSingleGeom = new THREE.BoxGeometry(mainPillowSingleWidth, mainPillowThickness3D * 0.9, mainPillowLength3D);
+                const mainPillowMesh = new THREE.Mesh(mainPillowSingleGeom, pillowMaterial);
+                mainPillowMesh.position.set(0, mainPillowBaseY, mainPillowCenterZ);
+                mainPillowMesh.castShadow = true; mainPillowMesh.receiveShadow = true; bedGroup.add(mainPillowMesh);
+               
+                const accentPillowSingleWidth = mainPillowSingleWidth * ACCENT_PILLOW_SCALE_FACTOR;
+                const accentPillowSingleGeom = new THREE.BoxGeometry(accentPillowSingleWidth, accentPillowThickness3D, accentPillowLength3D);
+                const accentPillowMesh = new THREE.Mesh(accentPillowSingleGeom, pillowMaterial);
+                accentPillowMesh.position.set(0, accentPillowBaseY, accentPillowCenterZ);
+                accentPillowMesh.castShadow = true; accentPillowMesh.receiveShadow = true; bedGroup.add(accentPillowMesh);
+            } else { /* ... existing pillow logic ... */
+                const mainPillowDoubleWidth = Math.min((mattressWidth / 2) * 0.85, PILLOW_LENGTH_CM * 1.1 * CM_TO_3D_SCALE);
+                const mainPillowDoubleGeom = new THREE.BoxGeometry(mainPillowDoubleWidth, mainPillowThickness3D * 0.9, mainPillowLength3D);
+                const pillowXOffset = (mattressWidth / 4) ;
+
+
+                const mainPillow1 = new THREE.Mesh(mainPillowDoubleGeom, pillowMaterial);
+                mainPillow1.position.set(-pillowXOffset , mainPillowBaseY, mainPillowCenterZ);
+                mainPillow1.castShadow = true; mainPillow1.receiveShadow = true; bedGroup.add(mainPillow1);
+                const mainPillow2 = new THREE.Mesh(mainPillowDoubleGeom.clone(), pillowMaterial);
+                mainPillow2.position.set(pillowXOffset , mainPillowBaseY, mainPillowCenterZ);
+                mainPillow2.castShadow = true; mainPillow2.receiveShadow = true; bedGroup.add(mainPillow2);
+
+
+                const accentPillowDoubleWidth = mainPillowDoubleWidth * ACCENT_PILLOW_SCALE_FACTOR;
+                const accentPillowDoubleGeom = new THREE.BoxGeometry(accentPillowDoubleWidth, accentPillowThickness3D, accentPillowLength3D);
+                const accentPillow1 = new THREE.Mesh(accentPillowDoubleGeom, pillowMaterial);
+                accentPillow1.position.set(-pillowXOffset, accentPillowBaseY, accentPillowCenterZ);
+                accentPillow1.castShadow = true; accentPillow1.receiveShadow = true; bedGroup.add(accentPillow1);
+                const accentPillow2 = new THREE.Mesh(accentPillowDoubleGeom.clone(), pillowMaterial);
+                accentPillow2.position.set(pillowXOffset, accentPillowBaseY, accentPillowCenterZ);
+                accentPillow2.castShadow = true; accentPillow2.receiveShadow = true; bedGroup.add(accentPillow2);
+            }
+           
+            // --- Person(s) Visualization ---
+            const personYPosition = topOfMattressY + (PERSON_MODEL_BODY_DEPTH_CM * CM_TO_3D_SCALE / 2); // Bottom of person model on mattress
+
+
+            // Calculate the Z position for the person model's group origin
+            // Target: Person's shoulders should overlap the "foot-ward" edge of the main pillow by SHOULDER_PILLOW_OVERLAP_CM
+            const shoulderTargetZ = (mainPillowCenterZ + mainPillowLength3D / 2) - (SHOULDER_PILLOW_OVERLAP_CM * CM_TO_3D_SCALE);
+
+
+            if (p1HeightCm && p1HeightCm > 0) {
+                const headEquivalentP1Cm = p1HeightCm * HEAD_EQUIVALENT_LENGTH_FACTOR;
+                const bodyBoxP1Cm = p1HeightCm - headEquivalentP1Cm;
+                const p1BodyBoxLength3D = bodyBoxP1Cm * CM_TO_3D_SCALE;
+                // The person model's origin is its center. Its "shoulder end" is at -p1BodyBoxLength3D / 2 from its origin.
+                // So, person_group_origin.z - p1BodyBoxLength3D / 2 = shoulderTargetZ
+                const person1_Z_GroupOrigin = shoulderTargetZ + p1BodyBoxLength3D / 2;
+               
+                const person1Mesh = createPersonOnBedMesh(p1HeightCm, numPeople === 1 ? 0 : -mattressWidth / 4.2);
+                person1Mesh.position.y = personYPosition;
+                person1Mesh.position.z = person1_Z_GroupOrigin;
+                bedGroup.add(person1Mesh);
+            }
+            if (numPeople === 2 && p2HeightCm && p2HeightCm > 0) {
+                const headEquivalentP2Cm = p2HeightCm * HEAD_EQUIVALENT_LENGTH_FACTOR;
+                const bodyBoxP2Cm = p2HeightCm - headEquivalentP2Cm;
+                const p2BodyBoxLength3D = bodyBoxP2Cm * CM_TO_3D_SCALE;
+                const person2_Z_GroupOrigin = shoulderTargetZ + p2BodyBoxLength3D / 2;
+
+
+                const person2Mesh = createPersonOnBedMesh(p2HeightCm, mattressWidth / 4.2);
+                person2Mesh.position.y = personYPosition;
+                person2Mesh.position.z = person2_Z_GroupOrigin;
+                bedGroup.add(person2Mesh);
+            }
+
+
+            scene.add(bedGroup);
+            onWindowResize();
+            if(controls) { controls.target.set(0, mattressY * 0.5, 0); controls.update(); } // Focus camera on mattress
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+
+        function validateInputs() {
+            const numP = parseInt(numPeopleSelect.value);
+            const h1Val = height1Input.value;
+            const w1Val = weight1Input.value;
+            const errors = [];
+
+
+            if (!h1Val) errors.push("Person 1 height is required.");
+            else {
+                const h1 = parseFloat(h1Val);
+                if (isNaN(h1) || h1 <= 0) errors.push("Person 1 height must be a positive number.");
+                else if (h1 < 50 || h1 > 280) errors.push("Person 1 height is unrealistic (enter 50-280 cm).");
+            }
+
+
+            if (!w1Val) errors.push("Person 1 weight is required.");
+            else {
+                const w1 = parseFloat(w1Val);
+                if (isNaN(w1) || w1 <= 0) errors.push("Person 1 weight must be a positive number.");
+                else if (w1 < 10 || w1 > 300) errors.push("Person 1 weight is unrealistic (enter 10-300 kg).");
+            }
+
+
+            if (numP === 2) {
+                const h2Val = height2Input.value;
+                const w2Val = weight2Input.value;
+                if (!h2Val) errors.push("Person 2 height is required.");
+                else {
+                    const h2 = parseFloat(h2Val);
+                    if (isNaN(h2) || h2 <= 0) errors.push("Person 2 height must be a positive number.");
+                    else if (h2 < 50 || h2 > 280) errors.push("Person 2 height is unrealistic (enter 50-280 cm).");
+                }
+                if (!w2Val) errors.push("Person 2 weight is required.");
+                else {
+                    const w2 = parseFloat(w2Val);
+                    if (isNaN(w2) || w2 <= 0) errors.push("Person 2 weight must be a positive number.");
+                    else if (w2 < 10 || w2 > 300) errors.push("Person 2 weight is unrealistic (enter 10-300 kg).");
+                }
+            }
+            return errors;
+        }
+
+
+        function displayErrors(errorMessages) {
+            errorArea.innerHTML = '';
+            if (errorMessages.length === 0) {
+                errorArea.classList.add('hidden');
+                return;
+            }
+            const ul = document.createElement('ul');
+            errorMessages.forEach(msg => {
+                const li = document.createElement('li');
+                li.textContent = msg;
+                ul.appendChild(li);
+            });
+            errorArea.appendChild(ul);
+            errorArea.classList.remove('hidden');
+            resultArea.classList.add('hidden');
+            bedVisualContainer.classList.add('hidden');
+        }
+
+
+        function displayResult(bed, minRequiredLength, storageType, p1H, p2H, drawerInfo = null) {
+            resultArea.innerHTML = '';
+            const resultBox = document.createElement('div');
+            resultBox.className = 'result-box';
+
+
+            const title = document.createElement('h3');
+            title.textContent = `Recommended Bed: ${bed.name}`;
+            resultBox.appendChild(title);
+
+
+            const dimensionsPara = document.createElement('p');
+            dimensionsPara.innerHTML = `Dimensions: ${bed.widthCm.toFixed(1)}cm W x ${bed.lengthCm.toFixed(1)}cm L (${bed.widthIn}" x ${bed.lengthIn}")`;
+            resultBox.appendChild(dimensionsPara);
+
+
+            let notesText = "";
+            const tallestPerson = Math.max(p1H, p2H || 0);
+            if (bed.lengthCm < minRequiredLength - 1) {
+                notesText += `This bed is shorter than the ideal minimum length of ${minRequiredLength.toFixed(1)}cm for the tallest person (${tallestPerson}cm). Consider a longer bed if available. `;
+            }
+             if ( tallestPerson > bed.lengthCm - 15 ) { // Reduced buffer for this specific note
+                notesText += `The selected bed length (${bed.lengthCm.toFixed(1)}cm) provides somewhat limited foot room for the tallest person. `;
+            }
+
+
+            if (storageType === "drawers") notesText += "Bed style includes side drawers. ";
+            else if (storageType === "lift_up") notesText += "Bed style includes a lift-up frame for storage. ";
+            else notesText += "Bed style chosen with legs (no extra storage). ";
+
+
+
+
+            if (notesText.trim() || drawerInfo) {
+                const notesPara = document.createElement('p');
+                notesPara.className = "details"; // Apply 'details' class for styling
+                let notesHTML = "";
+                if (notesText.trim()) {
+                     notesHTML += `<strong>Notes:</strong> ${notesText.trim()}<br>`;
+                }
+
+
+                if (drawerInfo) {
+                    notesHTML += `<strong>Drawer Details (per side):</strong><br>
+                                  - Number of Drawers: ${drawerInfo.numDrawersPerSide} (Total: ${drawerInfo.numDrawersPerSide * 2})<br>
+                                  - Approx. Size (each): ${drawerInfo.heightCm.toFixed(1)}cm H x ${drawerInfo.widthCm.toFixed(1)}cm W x ${drawerInfo.depthCm.toFixed(1)}cm D<br>
+                                  - Approx. Volume (each): ${drawerInfo.volumePerDrawerLiters.toFixed(1)} Liters<br>
+                                  - Total Est. Capacity: ${drawerInfo.totalCapacityLiters.toFixed(1)} Liters`;
+                }
+                notesPara.innerHTML = notesHTML;
+                resultBox.appendChild(notesPara);
+            }
+
+
+            resultArea.appendChild(resultBox);
+            resultArea.classList.remove('hidden');
+        }
+
+
+        calculateBtn.addEventListener('click', () => {
+            clearResultsAndVisual();
+            const errors = validateInputs();
+            if (errors.length > 0) {
+                displayErrors(errors);
+                return;
+            }
+
+
+            const numP = parseInt(numPeopleSelect.value);
+            const spaciousnessPref = spaciousnessSelect.value;
+            const storageOpt = storageOptionSelect.value;
+            const h1 = parseFloat(height1Input.value);
+            // const w1 = parseFloat(weight1Input.value); // Weight not directly used in bed choice yet
+            let h2 = 0;
+            // let w2 = 0;
+            if (numP === 2) {
+                h2 = parseFloat(height2Input.value);
+                // w2 = parseFloat(weight2Input.value);
+            }
+
+
+            const maxHeight = (numP === 1 || h2 <= 0) ? h1 : Math.max(h1, h2);
+            // Minimum length: person's height + buffer for pillow and foot room.
+            // Pillow takes ~60cm, but person's head/shoulder on it. Net space needed for pillow setup ~30-40cm.
+            // Add 10-15cm foot room. Total buffer ~25-30cm on top of height.
+            const minRequiredLength = maxHeight + 25;
+
+
+            let candidateNames = [];
+            if (numP === 1) {
+                if (spaciousnessPref === "cozy") candidateNames = ["Twin", "Twin XL"];
+                else if (spaciousnessPref === "standard") candidateNames = ["Twin XL", "Full"];
+                else candidateNames = ["Full", "Queen"];
+            } else {
+                if (spaciousnessPref === "cozy") candidateNames = ["Full", "Queen"];
+                else if (spaciousnessPref === "standard") candidateNames = ["Queen", "King"];
+                else candidateNames = ["King", "California King"];
+            }
+
+
+            let bestBed = null;
+            let potentialBeds = bedSizes.filter(b => candidateNames.includes(b.name));
+            let bedsMeetingLength = potentialBeds.filter(b => b.lengthCm >= minRequiredLength);
+
+
+            if (bedsMeetingLength.length > 0) {
+                bedsMeetingLength.sort((a, b) => {
+                    if (a.widthCm !== b.widthCm) return a.widthCm - b.widthCm; // Prefer narrower of suitable
+                    return b.lengthCm - a.lengthCm; // Then prefer longer
+                });
+                bestBed = bedsMeetingLength[0];
+            } else if (potentialBeds.length > 0) {
+                potentialBeds.sort((a, b) => {
+                    const diffA = a.lengthCm - minRequiredLength;
+                    const diffB = b.lengthCm - minRequiredLength;
+                    if (diffA >= 0 && diffB < 0) return -1;
+                    if (diffB >= 0 && diffA < 0) return 1;  
+                    if (b.lengthCm !== a.lengthCm) return b.lengthCm - a.lengthCm; // Prefer longer if both too short
+                    return a.widthCm - b.widthCm;
+                });
+                bestBed = potentialBeds[0];
+            } else { // Fallback if no candidates from preferred list
+                let allBedsMeetingLength = bedSizes.filter(b => b.lengthCm >= minRequiredLength);
+                if (allBedsMeetingLength.length > 0) {
+                    allBedsMeetingLength.sort((a, b) => {
+                        if (a.widthCm !== b.widthCm) return a.widthCm - b.widthCm;
+                        return b.lengthCm - a.lengthCm;
+                    });
+                    bestBed = allBedsMeetingLength[0];
+                } else {
+                    const sortedByLength = [...bedSizes].sort((a, b) => b.lengthCm - a.lengthCm);
+                    bestBed = sortedByLength[0]; // Pick longest available if all else fails
+                }
+            }
+           
+            let drawerDetails = null;
+            if (storageOpt === "drawers") {
+                const drawerHeightCm = FRAME_VISIBLE_HEIGHT_CM * DRAWER_USABLE_HEIGHT_FACTOR;
+                // Drawer front panel width (along bed length)
+                const drawerFaceWidthCm = ( (bestBed.lengthCm + 2 * FRAME_BORDER_THICKNESS_CM) - ( (NUM_DRAWERS_PER_SIDE + 1) * DRAWER_GAP_CM ) ) / NUM_DRAWERS_PER_SIDE;
+                // Drawer depth (into the bed from the side)
+                const usableDrawerDepthCm = Math.min(USABLE_DRAWER_DEPTH_CM_MAX, (bestBed.widthCm / 2) - FRAME_BORDER_THICKNESS_CM - USABLE_DRAWER_SIDE_CLEARANCE_CM);
+               
+                if (drawerFaceWidthCm > 0 && usableDrawerDepthCm > 0) {
+                    const volumeCm3 = drawerHeightCm * drawerFaceWidthCm * usableDrawerDepthCm;
+                    const volumeLiters = volumeCm3 / 1000;
+                    drawerDetails = {
+                        numDrawersPerSide: NUM_DRAWERS_PER_SIDE,
+                        heightCm: drawerHeightCm,
+                        widthCm: drawerFaceWidthCm,
+                        depthCm: usableDrawerDepthCm,
+                        volumePerDrawerLiters: volumeLiters,
+                        totalCapacityLiters: volumeLiters * NUM_DRAWERS_PER_SIDE * 2 // For both sides
+                    };
+                }
+            }
+
+
+            displayResult(bestBed, minRequiredLength, storageOpt, h1, (numP === 2 ? h2 : 0), drawerDetails);
+           
+            bedVisualContainer.classList.remove('hidden');
+            updateBedVisual(bestBed.widthCm, bestBed.lengthCm, numP, storageOpt, h1, (numP === 2 ? h2 : 0));
+        });
+       
+        // Automatically trigger init3D if container is visible on load (e.g. if dev tools keep it open)
+        // but generally it's called by updateBedVisual first time.
+        // window.onload = () => {
+        //    if (!bedVisualContainer.classList.contains('hidden') && bedVisualContainer.clientWidth > 0) {
+        //        if (!scene) init3D(); // Initialize if not already done and visible
+        //    }
+        // };
+
+
+    </script>
+</body>
+</html>
